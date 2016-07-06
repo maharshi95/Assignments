@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"><html xmlns="http://www.w3.org/1999/xhtml" lang="en"><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8"/><link rel="stylesheet" href="../.resources/report.css" type="text/css"/><link rel="shortcut icon" href="../.resources/report.gif" type="image/gif"/><title>SmartHome.java</title><link rel="stylesheet" href="../.resources/prettify.css" type="text/css"/><script type="text/javascript" src="../.resources/prettify.js"></script></head><body onload="window['PR_TAB_WIDTH']=4;prettyPrint()"><div class="breadcrumb" id="breadcrumb"><span class="info"><a href="../.sessions.html" class="el_session">Sessions</a></span><a href="../index.html" class="el_report">smart.home.project</a> &gt; <a href="index.source.html" class="el_package">default</a> &gt; <span class="el_source">SmartHome.java</span></div><h1>SmartHome.java</h1><pre class="source lang-java linenums">import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+
+/**
+ * SmartHome is the container for all the Appliances and is responsible for issuing the commands to them.
+ */
+public class SmartHome {
+    
+    //list of appliances
+    private ArrayList&lt;Appliance&gt; appliances;
+    
+    private Thread controlThread;
+    private Runnable task;
+    
+    //primary appliances
+    private WaterHeater waterHeater;
+    private AirConditioner airConditioner;
+    private CookingOven cookingOven;
+    
+    //The Schdule of events to be carried out
+    private ArrayList&lt;Event&gt; schedule;
+    
+    
+<span class="fc" id="L27">    public SmartHome() {</span>
+<span class="fc" id="L28">        appliances= new ArrayList&lt;Appliance&gt;();</span>
+        
+<span class="fc" id="L30">        waterHeater = new WaterHeater();</span>
+<span class="fc" id="L31">        airConditioner = new AirConditioner();</span>
+<span class="fc" id="L32">        cookingOven = new CookingOven();</span>
+        
+<span class="fc" id="L34">        appliances.add(waterHeater);</span>
+<span class="fc" id="L35">        appliances.add(airConditioner);</span>
+<span class="fc" id="L36">        appliances.add(cookingOven);</span>
+        
+<span class="fc" id="L38">        schedule = new ArrayList&lt;Event&gt;();</span>
+<span class="fc" id="L39">    }</span>
+    
+    /**
+     * This method reads the schedule decided for the SmartHome from a file and parses it as a List of events
+     */
+    public void readSchedule(String filename) throws BadScheduleException, ScheduleNotFoundException {
+<span class="fc" id="L45">        BufferedReader br = null;</span>
+        try {
+            String line;
+<span class="fc" id="L48">            br = new BufferedReader(new FileReader(filename));</span>
+<span class="fc bfc" id="L49" title="All 2 branches covered.">            while ((line = br.readLine()) != null) {</span>
+<span class="fc" id="L50">				Event event = Event.parseEvent(line,this);</span>
+//				System.out.println(line + &quot; &quot; + event + &quot; &quot; + event.getAppliance() + &quot; &quot; + getWaterHeater());
+<span class="fc bfc" id="L52" title="All 2 branches covered.">				if(event != null) {</span>
+<span class="fc" id="L53">				    schedule.add(event);</span>
+<span class="pc bpc" id="L54" title="1 of 4 branches missed.">				    if(event.getAppliance().canAutoSwitchOff() &amp;&amp; event.getState() == true) {</span>
+<span class="fc" id="L55">				        Event stopEvent = new Event(event.getAppliance(),event.getTime()+event.getAppliance().autoSwitchOffTime(), false);</span>
+<span class="fc" id="L56">				        schedule.add(stopEvent);</span>
+<span class="fc" id="L57">				    }</span>
+				}
+				else {
+<span class="fc" id="L60">				    throw new BadScheduleException(&quot;Bad Event Format: &quot; + line);</span>
+				}
+<span class="fc" id="L62">			}</span>
+        }
+<span class="fc" id="L64">        catch(IOException e) {</span>
+<span class="fc" id="L65">            throw new ScheduleNotFoundException(&quot;Schedule file \&quot;&quot; + filename + &quot;\&quot; not found!&quot;);</span>
+        }
+        finally {
+<span class="fc" id="L68">            try {</span>
+<span class="pc bpc" id="L69" title="1 of 4 branches missed.">				if (br != null)br.close();</span>
+<span class="nc" id="L70">			} catch (IOException ex) {</span>
+<span class="nc" id="L71">				ex.printStackTrace();</span>
+<span class="fc" id="L72">			}</span>
+<span class="nc" id="L73">        }</span>
+<span class="fc" id="L74">    }</span>
+    
+    public void processSchedule() {
+<span class="fc" id="L77">        Collections.sort(schedule);</span>
+<span class="fc" id="L78">        task = new Runnable(){</span>
+            @Override
+            public void run() {
+<span class="fc" id="L81">                long delay = Appliance.TIME_UNIT*schedule.get(0).getTime();</span>
+                
+                try {
+<span class="fc" id="L84">                    Thread.sleep(delay);</span>
+<span class="pc" id="L85">                } catch(InterruptedException e) {}</span>
+
+<span class="fc bfc" id="L87" title="All 2 branches covered.">                for(Event e : schedule) {</span>
+<span class="fc" id="L88">                    boolean success = e.getAppliance().changeState(e.getState());</span>
+<span class="fc bfc" id="L89" title="All 2 branches covered.">                    String state = (e.getState() ? &quot;on&quot; : &quot;off&quot;);</span>
+<span class="fc bfc" id="L90" title="All 2 branches covered.">                    if(success) {</span>
+<span class="fc" id="L91">                        String msg = e.getTime() + &quot;: &quot; + e.getAppliance().getName() + &quot; turned &quot; + state + &quot; successfully.&quot;;</span>
+<span class="fc" id="L92">                        System.out.println(msg);</span>
+<span class="fc" id="L93">                    }</span>
+                    else {
+<span class="fc" id="L95">                        String msg = e.getTime() + &quot;: Cannot turn &quot; + state + &quot; &quot; + e.getAppliance().getName() + &quot;. It is already &quot; + state + &quot;.&quot;;</span>
+<span class="fc" id="L96">                        System.out.println(msg);</span>
+                    }
+<span class="fc" id="L98">                }</span>
+<span class="fc" id="L99">            }</span>
+        };
+<span class="fc" id="L101">        controlThread = new Thread(task);</span>
+<span class="fc" id="L102">        controlThread.start();</span>
+<span class="fc" id="L103">    }</span>
+    
+    public WaterHeater getWaterHeater() {
+<span class="fc" id="L106">        return waterHeater;</span>
+    }
+    
+    
+    public AirConditioner getAirConditioner() {
+<span class="fc" id="L111">        return airConditioner;</span>
+    }
+    
+    
+    public CookingOven getCookingOven() {
+<span class="fc" id="L116">        return cookingOven;</span>
+    }
+    
+    public ArrayList&lt;Appliance&gt; getAppliances() {
+<span class="fc" id="L120">        return appliances;</span>
+    }
+    
+    public Runnable getTask() {
+<span class="fc" id="L124">        return task;</span>
+    }
+}
+</pre><div class="footer"><span class="right">Created with <a href="http://www.eclemma.org/jacoco">JaCoCo</a> 0.7.6.201602180812</span></div></body></html>
