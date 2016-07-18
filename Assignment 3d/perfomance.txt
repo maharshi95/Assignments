@@ -1,0 +1,3 @@
+Time taken to query an Order query filtered by DateTime:
+	without indexing	: 403ms
+	with indexing		: 2.3ms	
